@@ -14,84 +14,14 @@ import {
   NoConfigError,
 } from './errors';
 
-import jsDialect from './dialect/js/index';
-import sqlDialect from './dialect/sql/index';
-
 const filename = path.join(process.cwd(), 'mariner.js');
-const defaultPath = path.join(process.cwd(), 'migrations');
 
-function getConfig() {
-  const exists = fs.existsSync(filename);
-  const cfg = exists ? require(filename) : {};
 
-  if (cfg.directory) {
-    cfg.directory = path.resolve(process.cwd(), cfg.directory);
-  } else {
-    cfg.directory = defaultPath;
-  }
-
-  return cfg;
+if (! fs.existsSync(filename)) {
+  throw new NoConfigError();
 }
 
-function ensureConfig() {
-  if (! fs.existsSync(filename)) {
-    throw new NoConfigError();
-  }
-}
-
-function initDialects(config) {
-  config.dialects = _.transform(config.plugins, (dialects, plugin) => {
-    if (_.isString(plugin)) {
-      const name = plugin.indexOf('mariner-') !== -1 ? plugin : `mariner-${plugin}`;
-      const isSql = plugin === 'sql';
-      const isInternal = isSql || plugin === 'js';
-
-      if (isInternal) {
-        dialects[ plugin ] = isSql ? sqlDialect : jsDialect;
-      } else {
-        dialects[ name.replace('mariner-', '') ] = require(name);
-      }
-    } else if (_.isArray(plugin)) {
-      dialects[ plugin[0] ] = plugin[1];
-    }
-  });
-}
-
-function initBackend(config) {
-  const full = config.backend.indexOf('mariner-') !== -1 ? config.backend :
-                                                           `mariner-${config.backend}`;
-  const short = full.replace('mariner-', '');
-  let backend = config.dialects[ short ];
-
-  if (! backend) {
-    try {
-      backend = require(full);
-    } catch (e) {
-      console.error(e); // eslint-disable-line no-console
-    }
-  }
-
-  backend = backend && backend.Store ? backend.Store : backend;
-
-  config.backend = short;
-  config.backendStore = backend;
-
-  return config;
-}
-
-function init() {
-  const config = getConfig();
-
-  initDialects(config);
-
-  if (config.backend) {
-    initBackend(config);
-  }
-
-  return config;
-}
-
-const config = init();
+const config = require(filename);
 
 program.version(require('../package.json').version);
 
@@ -99,13 +29,11 @@ program.command('create <name...>')
   .option('-e, --extension <extension>', 'Dialect Extension', 'sql')
   .description('Create a new database migration')
   .action(function(name, command) {
-    ensureConfig();
-
     name = name.join('-');
 
     const options = command.opts();
 
-    const migrate = new Migrate(config);
+    const migrate = Migrate.init(config);
 
     migrate.create(name, options)
       .then((created) => {
@@ -173,12 +101,10 @@ program.command('migrate <direction>')
   .option('-n, --number <number>', 'How many migrations to run', null)
   .description('Run database migrations; up defaults to running all, down defaults to running last')
   .action(function(direction, command) {
-    ensureConfig();
-
     const options = command.opts();
     const count = options.number ? Number(options.number) : null;
 
-    const migrate = new Migrate(config);
+    const migrate = Migrate.init(config);
 
     return migrate.init()
     .then(() => {

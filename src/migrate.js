@@ -16,11 +16,16 @@ import {
   DialectUnknown,
 } from './errors';
 
+import jsDialect from './dialect/js/index';
+import sqlDialect from './dialect/sql/index';
+
 const UP = 'up';
 const DOWN = 'down';
 
 const MIGRATION_PATTERN = /^\d{14}_[A-Za-z0-9\-]+\./;
 const MIGRATION_NAME_FILTER = /[^A-Za-z0-9\-]+/g;
+
+const defaultMigrationsPath = path.join(process.cwd(), 'migrations');
 
 function pathExists(pth) {
   return new Promise((resolve, reject) => {
@@ -45,7 +50,56 @@ function timestamp() {
     pad(d.getSeconds());
 }
 
+function initDialects(config) {
+  return _.transform(config.plugins, (dialects, plugin) => {
+    if (_.isString(plugin) && plugin.indexOf('mariner-') !== -1) {
+      dialects[ plugin.replace('mariner-', '') ] = require(plugin);
+    }
+  }, {
+    js : jsDialect,
+    sql : sqlDialect,
+  });
+}
+
+function initBackend(config) {
+  const full = config.backend.indexOf('mariner-') !== -1 ? config.backend :
+                                                           `mariner-${config.backend}`;
+  const short = full.replace('mariner-', '');
+  let backend = config.dialects[ short ];
+
+  if (! backend) {
+    try {
+      backend = require(full);
+    } catch (e) {
+      console.error(e); // eslint-disable-line no-console
+    }
+  }
+
+  backend = backend && backend.Store ? backend.Store : backend;
+
+  config.backend = short;
+  config.backendStore = backend;
+
+  return config;
+}
+
 export default class Migrate {
+  static init(config) {
+    config.dialects = initDialects(config);
+
+    if (config.backend) {
+      config = initBackend(config);
+    }
+
+    if (config.directory) {
+      config.directory = path.resolve(process.cwd(), config.directory);
+    } else {
+      config.directory = defaultMigrationsPath;
+    }
+
+    return new Migrate(config);
+  };
+
   constructor(options) {
     assert(_.isString(options.directory), 'Migrate must be passed a migrations directory');
     this.migrationsDir = options.directory;
