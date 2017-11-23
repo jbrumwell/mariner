@@ -16,9 +16,6 @@ import {
   DialectUnknown,
 } from './errors';
 
-import jsDialect from './dialect/js/index';
-import sqlDialect from './dialect/sql/index';
-
 const UP = 'up';
 const DOWN = 'down';
 
@@ -52,12 +49,14 @@ function timestamp() {
 
 function initDialects(config) {
   return _.transform(config.plugins, (dialects, plugin) => {
-    if (_.isString(plugin) && plugin.indexOf('mariner-') !== -1) {
-      dialects[ plugin.replace('mariner-', '') ] = require(plugin);
+    if (_.isString(plugin)) {
+      if (plugin.indexOf('mariner-') !== -1) {
+        dialects[ plugin.replace('mariner-', '') ] = require(plugin);
+      }
     }
   }, {
-    js : jsDialect,
-    sql : sqlDialect,
+    js : require('./dialect/js/index').default,
+    sql : require('./dialect/sql/index').default,
   });
 }
 
@@ -97,7 +96,7 @@ export default class Migrate {
       config.directory = defaultMigrationsPath;
     }
 
-    return new Migrate(config);
+    return new Migrate(config).init();
   };
 
   constructor(options) {
@@ -152,7 +151,8 @@ export default class Migrate {
       })
       .then(() => {
         return this.store.init(_.get(options, options.backend, {}));
-      });
+      })
+      .return(this);
   }
 
   setStore(store, options = this.options) {
