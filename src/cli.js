@@ -33,20 +33,21 @@ program.command('create <name...>')
 
     const options = command.opts();
 
-    const migrate = Migrate.init(config);
-
-    migrate.create(name, options)
-      .then((created) => {
-        console.log('Created:', created); // eslint-disable-line no-console
-      })
-      .catch(MarinerError, (err) => {
-        console.error('⛵\tERROR: ', err.message);  // eslint-disable-line no-console
-        process.exit(1);
-      })
-      .catch((err) => {
-        console.error(err.stack);  // eslint-disable-line no-console
-        process.exit(1);
-      });
+    Migrate.init(config)
+    .then((instance) => {
+      return instance.create(name, options);
+    })
+    .then((created) => {
+      console.log('Created:', created); // eslint-disable-line no-console
+    })
+    .catch(MarinerError, (err) => {
+      console.error('⛵\tERROR: ', err.message);  // eslint-disable-line no-console
+      process.exit(1);
+    })
+    .catch((err) => {
+      console.error(err.stack);  // eslint-disable-line no-console
+      process.exit(1);
+    });
   });
 
 program.command('init')
@@ -104,10 +105,8 @@ program.command('migrate <direction>')
     const options = command.opts();
     const count = options.number ? Number(options.number) : null;
 
-    const migrate = Migrate.init(config);
-
-    return migrate.init()
-    .then(() => {
+    Migrate.init(config)
+    .then((migrate) => {
       return migrate.run(direction, count);
     })
     .then(() => {
